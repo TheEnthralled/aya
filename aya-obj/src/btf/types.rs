@@ -820,7 +820,7 @@ impl Array {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BtfParam {
     pub name_offset: u32,
     pub btf_type: u32,
@@ -877,6 +877,25 @@ impl FuncProto {
             return_type,
             params,
         }
+    }
+}
+
+impl Display for FuncProto {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut params_str = String::new();
+        self.params.iter().for_each(|btf_param| {
+            let param_str = BtfKind::try_from(btf_param.btf_type).unwrap().to_string() + " ";
+            params_str.push_str(param_str.as_str());
+        });
+
+        let return_type_str = BtfKind::try_from(self.return_type).unwrap().to_string();
+
+        write!(
+            f,
+            "[FUNC_PROTO]: return_type={}, params=({})",
+            return_type_str,
+            &params_str[0..params_str.len() - 1]
+        )
     }
 }
 
