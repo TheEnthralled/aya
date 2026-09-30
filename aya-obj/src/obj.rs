@@ -3,7 +3,7 @@
 use std::{
     borrow::ToOwned as _,
     cell::LazyCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     ffi::{CStr, CString, FromBytesWithNulError},
     mem, ptr,
     slice::from_raw_parts_mut,
@@ -19,7 +19,10 @@ use object::{
 };
 
 use crate::{
-    btf::{Array, Btf, BtfError, BtfExt, BtfType, DataSecEntry, FuncSecInfo, LineSecInfo, Struct},
+    btf::{
+        Array, Btf, BtfError, BtfExt, BtfKind, BtfType, DataSecEntry, FuncProto, FuncSecInfo,
+        LineSecInfo, Struct, Var,
+    },
     generated::{
         BPF_CALL, BPF_F_RDONLY_PROG, BPF_JMP, BPF_K, bpf_func_id, bpf_insn, bpf_map_info,
         bpf_map_type::BPF_MAP_TYPE_ARRAY,
@@ -50,6 +53,8 @@ pub struct Object {
     pub btf_ext: Option<BtfExt>,
     /// Referenced maps
     pub maps: HashMap<String, Map>,
+    /// Defined struct_ops instances.
+    pub struct_ops: HashMap<String, StructOpsInstance>,
     /// A hash map of programs, using the program names parsed
     /// in [`ProgramSection`]s as keys.
     pub programs: HashMap<String, Program>,
@@ -109,9 +114,43 @@ pub struct Function {
     pub line_info_rec_size: usize,
 }
 
+/**
+ *
+ *
+ * Invariants worth enforcing where you construct it,
+ * because the record can't express them by itself:
+ * 1. every func_ptrs offset lands exactly on a member that is a function pointer
+ * 2. no offset appears twice; bytes.len() equals the struct's size from BTF
+ * 3. every target resolves to a function in a struct_ops program section.
+*/
+
+#[derive(Clone, Debug)]
+pub struct StructOpsInstance {
+    /// Index into the type table located in .BTF.
+    /// Gives us the struct's name to match in vmlinux BTF through btf.type_name(btf.type_by_id(type_id)?).
+    /// and STRUCT member metadata (which members are function pointers, offsets).
+    pub type_id: u32,
+    /// Whether it is placed under .struct_ops or .struct_ops.link
+    pub is_link: bool,
+    /// Struct members who are function pointers. Not all of these members point to functions in     
+    /// struct_ops program sections.
+    pub func_ptrs: Vec<StructOpsFnPtrMember>,
+}
+
+/// A struct_ops struct member which is a function pointer.
+#[derive(Clone, Debug)]
+pub struct StructOpsFnPtrMember {
+    /// Member name.
+    name: String,
+    /// raw bit offset from the start of the enclosing struct.
+    bit_offset: usize,
+    /// Function prototype information of the function we are pointing to.
+    func_proto: FuncProto,
+}
+
 /// Section types containing eBPF programs
 ///
-/// # Section Name Parsing
+/// Section Name Parsing
 ///
 /// Section types are parsed from the section name strings.
 ///
@@ -197,6 +236,9 @@ pub enum ProgramSection {
     },
     CgroupDevice,
     Iter {
+        sleepable: bool,
+    },
+    StructOps {
         sleepable: bool,
     },
 }
@@ -396,6 +438,8 @@ impl FromStr for ProgramSection {
             }
             "iter" => Self::Iter { sleepable: false },
             "iter.s" => Self::Iter { sleepable: true },
+            "struct_ops" => Self::StructOps { sleepable: false },
+            "struct_ops.s" => Self::StructOps { sleepable: true },
             _ => {
                 return Err(ParseError::InvalidProgramSection {
                     section: section.to_owned(),
@@ -468,14 +512,25 @@ impl Object {
             bpf_obj.collect_ksyms_from_btf()?;
         }
 
+        // Parse PROGRAM sections.
         for s in obj.sections() {
+            let section = Section::try_from(&s)?;
+            if section.kind != EbpfSectionKind::Program {
+                continue;
+            }
+            bpf_obj.parse_section(section)?;
+        }
+
+        for s in obj.sections() {
+            let section = Section::try_from(&s)?;
             if let Ok(name) = s.name()
-                && (name == ".BTF" || name == ".BTF.ext")
+                && (name == ".BTF"
+                    || name == ".BTF.ext"
+                    || section.kind == EbpfSectionKind::Program)
             {
                 continue;
             }
-
-            bpf_obj.parse_section(Section::try_from(&s)?)?;
+            bpf_obj.parse_section(section)?;
         }
 
         Ok(bpf_obj)
@@ -489,6 +544,7 @@ impl Object {
             btf: None,
             btf_ext: None,
             maps: HashMap::new(),
+            struct_ops: HashMap::new(),
             programs: HashMap::new(),
             functions: BTreeMap::new(),
             relocations: HashMap::new(),
@@ -754,6 +810,151 @@ impl Object {
         Ok(())
     }
 
+    /*
+     *
+     * [222] DATASEC '.struct_ops'  btf size=0  vlen=1     (ELF section #13, 176 bytes)
+       -> [211] VAR 'fifo'  btf offset=0 size=176     (ELF symbol: st_value=0 st_size=176)
+          -> [173] STRUCT 'Qdisc_ops'  size=176  vlen=22
+              byte  member         fn-ptr?  type
+              0x10  id             -        char[16]
+              0x28  enqueue        yes      int (*)(struct sk_buff *, struct Qdisc *, struct sk_buff * *)
+              0x30  dequeue        yes      struct sk_buff * (*)(struct Qdisc *)
+              ...
+    */
+
+    // https://docs.kernel.org/bpf/btf.html
+
+    fn parse_struct_ops(&mut self, section: &Section<'_>) -> Result<(), ParseError> {
+        if self.btf.is_none() {
+            return Err(ParseError::NoBTF);
+        }
+        let btf = self.btf.as_ref().unwrap();
+
+        let section_name = String::from(section.name);
+        let trimmed_section_name = if section_name.chars().nth(0).unwrap() == '?' {
+            &section_name[1..]
+        } else {
+            section_name.as_str()
+        };
+        let is_link = trimmed_section_name == ".struct_ops.link";
+
+        let name_to_sec_syms: HashMap<&String, &Symbol> = self
+            .symbols_by_section
+            .get(&section.index)
+            .ok_or_else(|| ParseError::NoSymbolsForSection {
+                section_name: section.name.to_owned(),
+            })?
+            .iter()
+            .filter_map(|s| {
+                let symbol = &self.symbol_table[s];
+                symbol.name.as_ref().map(|name| (name, symbol))
+            })
+            .collect();
+
+        let mut func_ptr_at_section_offset = HashMap::new();
+
+        for t in btf.types() {
+            if let BtfType::DataSec(datasec) = &t {
+                let type_name = btf.type_name(t)?;
+                if type_name == section.name {
+                    // each .struct_ops section should only contain VAR symbols
+                    for entry in &datasec.entries {
+                        let (name, struct_ops_var) = parse_struct_ops_var(&btf, entry, is_link)?;
+
+                        let var_symbol = name_to_sec_syms
+                            .get(&name)
+                            .ok_or_else(|| ParseError::SymbolNotFound { name: name.clone() })?;
+
+                        struct_ops_var.func_ptrs.iter().for_each(|fn_ptr| {
+                            // In bytes.
+                            let fn_ptr_member_byte_offset = fn_ptr.bit_offset / 8;
+
+                            // BPF objects are relocatable files. The ELF spec defines a symbol's
+                            // values as an offset from teh start of the section so section.address
+                            // is 0 here.
+                            let fn_ptr_section_byte_offset = ((var_symbol.address - section.address)
+                                as usize)
+                                + fn_ptr_member_byte_offset;
+
+                            func_ptr_at_section_offset
+                                .insert(fn_ptr_section_byte_offset, (fn_ptr.clone(), name.clone()));
+                        });
+
+                        self.struct_ops.insert(name, struct_ops_var);
+                    }
+                }
+            }
+        }
+
+        let struct_ops_program_sections: HashSet<usize> = self
+            .programs
+            .iter()
+            .filter(|(_, program)| match program.section {
+                ProgramSection::StructOps { .. } => true,
+                _ => false,
+            })
+            .map(|(_, program)| program.section_index)
+            .collect();
+
+        for relocation in &section.relocations {
+            let (struct_ops_func_ptr, struct_ops_name) = func_ptr_at_section_offset
+                .get(&(relocation.offset as usize))
+                .ok_or_else(|| ParseError::InvalidRelocation {
+                    section: String::from_str(section.name).unwrap(),
+                    offset: relocation.offset as usize,
+                })
+                .unwrap();
+
+            let sym_at_reloc = &self.symbol_table.get(&relocation.symbol_index).unwrap();
+            if sym_at_reloc.kind != SymbolKind::Text
+                || !sym_at_reloc.is_definition
+                || !struct_ops_program_sections.contains(&sym_at_reloc.section_index.unwrap())
+            {
+                return Err(ParseError::InvalidSymbol {
+                    index: sym_at_reloc.index,
+                    name: sym_at_reloc.name.clone(),
+                });
+            }
+
+            let sym_name = sym_at_reloc.name.clone().unwrap();
+            let btf_type_id = btf.id_by_type_name_kind(&sym_name.as_str(), BtfKind::Func)?;
+            match btf.type_by_id(btf_type_id)? {
+                BtfType::FuncProto(func_proto) => {
+                    let return_types_match =
+                        func_proto.return_type == struct_ops_func_ptr.func_proto.return_type;
+
+                    let parameter_types_match =
+                        (0..func_proto.params.len())
+                            .into_iter()
+                            .fold(true, |acc, e| {
+                                acc && (func_proto.params[e]
+                                    == struct_ops_func_ptr.func_proto.params[e])
+                            });
+
+                    if !return_types_match || !parameter_types_match {
+                        // TODO: return error.
+
+                        return Err(ParseError::StructOpsFuncProtoMismatch {
+                            name: struct_ops_name.clone(),
+                            member_name: struct_ops_func_ptr.name.clone(),
+                            func_name: sym_name.clone(),
+                            expected_func_proto: struct_ops_func_ptr.func_proto.clone(),
+                            matched_func_proto: func_proto.clone(),
+                        });
+                    }
+                }
+                _ => {
+                    return Err(ParseError::InvalidSymbol {
+                        index: sym_at_reloc.index,
+                        name: sym_at_reloc.name.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     // Parses multiple map definition contained in a single `maps` section (which is
     // different from `.maps` which is used for BTF). We can tell where each map is
     // based on the symbol table.
@@ -849,6 +1050,7 @@ impl Object {
                     );
                 }
             }
+            EbpfSectionKind::StructOps => self.parse_struct_ops(&section)?,
             EbpfSectionKind::Undefined | EbpfSectionKind::License | EbpfSectionKind::Version => {}
         }
 
@@ -935,6 +1137,20 @@ pub enum ParseError {
     #[error("unsupported relocation target")]
     UnsupportedRelocationTarget,
 
+    #[error(
+        "no corresponding relocation entry found for symbol {name} in section {section} at section offset {offset:#X}"
+    )]
+    NoValidRelocationFound {
+        section: String,
+        name: String,
+        offset: u64,
+    },
+
+    #[error(
+        "invalid relocation entry found for section {section} corresponding to offset {offset:#X}"
+    )]
+    InvalidRelocation { section: String, offset: usize },
+
     #[error("invalid program section `{section}`")]
     InvalidProgramSection { section: String },
 
@@ -972,6 +1188,17 @@ pub enum ParseError {
     #[error("no symbols found in the {section_name} section")]
     NoSymbolsForSection { section_name: String },
 
+    #[error(
+        "expected struct_ops instance {name} member {member_name} to point to function with signature {expected_func_proto} but matched with function {func_name} with signature {matched_func_proto}"
+    )]
+    StructOpsFuncProtoMismatch {
+        name: String,
+        member_name: String,
+        func_name: String,
+        expected_func_proto: FuncProto,
+        matched_func_proto: FuncProto,
+    },
+
     /// No BTF parsed for object
     #[error("no BTF parsed for object")]
     NoBTF,
@@ -1006,6 +1233,8 @@ pub enum EbpfSectionKind {
     Btf,
     /// `.BTF.ext`
     BtfExt,
+    /// `.struct_ops`
+    StructOps,
     /// `license`
     License,
     /// `version`
@@ -1030,6 +1259,8 @@ impl EbpfSectionKind {
             Self::Data
         } else if name.starts_with(".rodata") {
             Self::Rodata
+        } else if name.starts_with(".struct_ops") {
+            Self::StructOps
         } else if name == ".BTF" {
             Self::Btf
         } else if name == ".BTF.ext" {
@@ -1221,11 +1452,11 @@ fn parse_map_def(name: &str, data: &[u8]) -> Result<bpf_map_def, ParseError> {
     }
 }
 
-fn parse_btf_map_def(
-    btf: &Btf,
-    info: &DataSecEntry,
-) -> Result<(String, BtfMapDef, Option<BtfMapDef>), BtfError> {
-    let ty = match btf.type_by_id(info.btf_type)? {
+fn parse_struct_from_datasec_entry<'a>(
+    btf: &'a Btf,
+    entry: &DataSecEntry,
+) -> Result<(&'a Var, &'a Struct, u32), BtfError> {
+    let ty = match btf.type_by_id(entry.btf_type)? {
         BtfType::Var(var) => var,
         other => {
             return Err(BtfError::UnexpectedBtfType {
@@ -1233,7 +1464,6 @@ fn parse_btf_map_def(
             });
         }
     };
-    let map_name = btf.string_at(ty.name_offset)?;
 
     let root_type = btf.resolve_type(ty.btf_type)?;
     let s = match btf.type_by_id(root_type)? {
@@ -1245,8 +1475,66 @@ fn parse_btf_map_def(
         }
     };
 
+    Ok((ty, s, root_type))
+}
+
+fn parse_btf_map_def(
+    btf: &Btf,
+    info: &DataSecEntry,
+) -> Result<(String, BtfMapDef, Option<BtfMapDef>), BtfError> {
+    let (ty, s, _) = parse_struct_from_datasec_entry(btf, info)?;
+    let map_name = btf.string_at(ty.name_offset)?;
     let (map_def, inner_def) = parse_btf_map_struct(btf, s, &map_name, false)?;
     Ok((map_name.to_string(), map_def, inner_def))
+}
+
+fn parse_struct_ops_var(
+    btf: &Btf,
+    info: &DataSecEntry,
+    is_link: bool,
+) -> Result<(String, StructOpsInstance), BtfError> {
+    let (ty, s, struct_type) = parse_struct_from_datasec_entry(btf, info)?;
+    let var_name = btf.string_at(ty.name_offset)?;
+    let struct_def = parse_struct_ops_var_struct(btf, struct_type, s, is_link)?;
+    Ok((var_name.to_string(), struct_def))
+}
+
+fn parse_struct_ops_var_struct(
+    btf: &Btf,
+    type_id: u32,
+    s: &Struct,
+    is_link: bool,
+) -> Result<StructOpsInstance, BtfError> {
+    let mut func_ptr_members = Vec::new();
+
+    for m in &s.members {
+        match btf.type_by_id(m.btf_type)? {
+            BtfType::Ptr(pty) => {
+                match btf.type_by_id(pty.btf_type)? {
+                    // Function pointer
+                    BtfType::FuncProto(func_proto) => {
+                        let func_ptr_member_name = btf.string_at(m.name_offset)?.to_string();
+
+                        func_ptr_members.push(StructOpsFnPtrMember {
+                            bit_offset: Struct::member_bit_offset(s, m),
+                            name: func_ptr_member_name,
+                            func_proto: func_proto.clone(),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(StructOpsInstance {
+        type_id: type_id,
+        is_link: is_link,
+        // len: s.size,
+        // address:
+        func_ptrs: func_ptr_members,
+    })
 }
 
 /// Parses BTF struct members into a map definition.
