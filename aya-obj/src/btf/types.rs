@@ -51,6 +51,20 @@ impl Fwd {
     pub(crate) const fn type_info_size(&self) -> usize {
         size_of::<Self>()
     }
+
+    // We can only forward to either a struct or union type.
+    pub(crate) const fn new(name_offset: u32, is_union: bool) -> Self {
+        let mut info = (BtfKind::Fwd as u32) << 24;
+        if is_union {
+            info |= 1 << 31;
+        }
+
+        Self {
+            name_offset: name_offset,
+            info: info,
+            _unused: 0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -386,8 +400,6 @@ impl Int {
         (self.data & 0x00ff0000) >> 16
     }
 
-    // TODO: Remove directive this when this crate is pub
-    #[cfg(test)]
     pub(crate) const fn bits(&self) -> u32 {
         self.data & 0x000000ff
     }
@@ -820,7 +832,7 @@ impl Array {
 }
 
 #[repr(C)]
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct BtfParam {
     pub name_offset: u32,
     pub btf_type: u32,
@@ -877,25 +889,6 @@ impl FuncProto {
             return_type,
             params,
         }
-    }
-}
-
-impl Display for FuncProto {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut params_str = String::new();
-        self.params.iter().for_each(|btf_param| {
-            let param_str = BtfKind::try_from(btf_param.btf_type).unwrap().to_string() + " ";
-            params_str.push_str(param_str.as_str());
-        });
-
-        let return_type_str = BtfKind::try_from(self.return_type).unwrap().to_string();
-
-        write!(
-            f,
-            "[FUNC_PROTO]: return_type={}, params=({})",
-            return_type_str,
-            &params_str[0..params_str.len() - 1]
-        )
     }
 }
 

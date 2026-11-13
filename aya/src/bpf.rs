@@ -480,7 +480,8 @@ impl<'a> EbpfLoader<'a> {
                             | ProgramSection::Lsm { sleepable: _ }
                             | ProgramSection::LsmCgroup
                             | ProgramSection::BtfTracePoint
-                            | ProgramSection::Iter { sleepable: _ } => {
+                            | ProgramSection::Iter { sleepable: _ }
+                            | ProgramSection::StructOps { sleepable: _ } => {
                                 return Err(EbpfError::BtfError(err));
                             }
                             ProgramSection::KRetProbe
@@ -876,6 +877,9 @@ impl<'a> EbpfLoader<'a> {
                                 data.flags = BPF_F_SLEEPABLE;
                             }
                             Program::Iter(Iter { data })
+                        }
+                        ProgramSection::StructOps { sleepable: _ } => {
+                            todo!("struct_ops programs cannot be loaded yet")
                         }
                     }
                 };
