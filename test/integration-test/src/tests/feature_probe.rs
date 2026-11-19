@@ -25,6 +25,14 @@ fn probe_empty_btf_datasec() {
 }
 
 #[test_log::test]
+fn probe_btf_datasec_question_mark() {
+    kernel_assert!(
+        is_btf_feature_supported(BtfFeature::DataSecQuestionMark).unwrap(),
+        KernelVersion::new(6, 9, 0),
+    );
+}
+
+#[test_log::test]
 fn probe_uprobe_multi() {
     let current = KernelVersion::current().unwrap();
     let link_creation = is_uprobe_multi_supported(UProbeMultiFeature::LinkCreation).unwrap();

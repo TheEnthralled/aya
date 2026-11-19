@@ -1468,6 +1468,33 @@ pub(crate) fn probe_btf_datasec_zero() -> io::Result<bool> {
     )
 }
 
+pub(crate) fn probe_btf_datasec_question_mark() -> io::Result<bool> {
+    let mut btf = Btf::new();
+    let name_offset = btf.add_string("int");
+    let int_type = BtfType::Int(Int::new(name_offset, 4, IntEncoding::Signed, 0));
+    let int_type_id = btf.add_type(int_type);
+
+    let name_offset = btf.add_string("foo");
+    let var_type = BtfType::Var(Var::new(name_offset, int_type_id, VarLinkage::Static));
+    let var_type_id = btf.add_type(var_type);
+
+    // Linux 6.9 allowed DATASEC names starting with `?`.
+    // https://github.com/torvalds/linux/commit/bd70a8fb7ca4
+    let name_offset = btf.add_string("?.data");
+    let variables = vec![DataSecEntry {
+        btf_type: var_type_id,
+        offset: 0,
+        size: 4,
+    }];
+    let datasec_type = BtfType::DataSec(DataSec::new(name_offset, variables, 4));
+    btf.add_type(datasec_type);
+
+    feature_probe_result(
+        bpf_load_btf(btf.to_bytes().as_slice(), &mut [], Default::default()),
+        &[EINVAL],
+    )
+}
+
 pub(crate) fn probe_btf_enum64() -> io::Result<bool> {
     let mut btf = Btf::new();
     let name_offset = btf.add_string("enum64");

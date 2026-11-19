@@ -21,9 +21,9 @@ use libc::{E2BIG, EBADF, EINVAL, EOPNOTSUPP};
 use super::{
     SyscallError, UProbeMultiFeature, bpf_map_create, bpf_prog_load, bpf_raw_tracepoint_open,
     new_insn, probe_bpf_global_data, probe_bpf_name, probe_btf, probe_btf_datasec,
-    probe_btf_datasec_zero, probe_btf_decl_tag, probe_btf_enum64, probe_btf_float, probe_btf_func,
-    probe_btf_func_global, probe_btf_type_tag, probe_perf_link, probe_prog_id,
-    probe_uprobe_multi_link, unit_sys_bpf, with_prog_insns, with_trivial_prog,
+    probe_btf_datasec_question_mark, probe_btf_datasec_zero, probe_btf_decl_tag, probe_btf_enum64,
+    probe_btf_float, probe_btf_func, probe_btf_func_global, probe_btf_type_tag, probe_perf_link,
+    probe_prog_id, probe_uprobe_multi_link, unit_sys_bpf, with_prog_insns, with_trivial_prog,
 };
 use crate::{
     MockableFd,
@@ -160,6 +160,7 @@ pub fn is_btf_feature_supported(feature: BtfFeature) -> io::Result<bool> {
         BtfFeature::FuncGlobal => probe_btf_func_global(),
         BtfFeature::DataSec => probe_btf_datasec(),
         BtfFeature::DataSecZero => probe_btf_datasec_zero(),
+        BtfFeature::DataSecQuestionMark => probe_btf_datasec_question_mark(),
         BtfFeature::Float => probe_btf_float(),
         BtfFeature::DeclTag => probe_btf_decl_tag(),
         BtfFeature::TypeTag => probe_btf_type_tag(),

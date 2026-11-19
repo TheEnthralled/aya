@@ -65,6 +65,7 @@ impl !core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::BtfError
 impl !core::panic::unwind_safe::UnwindSafe for aya_obj::btf::BtfError
 pub enum aya_obj::btf::BtfFeature
 pub aya_obj::btf::BtfFeature::DataSec
+pub aya_obj::btf::BtfFeature::DataSecQuestionMark
 pub aya_obj::btf::BtfFeature::DataSecZero
 pub aya_obj::btf::BtfFeature::DeclTag
 pub aya_obj::btf::BtfFeature::Enum64

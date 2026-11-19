@@ -187,6 +187,8 @@ pub enum BtfFeature {
     DataSec,
     /// `BTF_KIND_DATASEC` types with zero entries.
     DataSecZero,
+    /// `BTF_KIND_DATASEC` names starting with `?`, such as `?.struct_ops`.
+    DataSecQuestionMark,
     /// `BTF_KIND_FLOAT`.
     Float,
     /// `BTF_KIND_DECL_TAG`.
@@ -551,7 +553,17 @@ impl Btf {
 
                     // Handle any "/" characters in section names.
                     // Example: "maps/hashmap"
-                    let fixed_name = name.replace('/', ".");
+                    let mut fixed_name = name.replace('/', ".");
+                    // The sections of optional struct_ops instances start
+                    // with `?`, which kernels before Linux 6.9 reject in
+                    // DATASEC names. Replace it with `_`, like libbpf does.
+                    // https://github.com/torvalds/linux/commit/bd70a8fb7ca4
+                    // https://github.com/libbpf/libbpf/commit/6ebaa3fb88bb
+                    if let Some(rest) = fixed_name.strip_prefix('?')
+                        && !features.is_supported(BtfFeature::DataSecQuestionMark)
+                    {
+                        fixed_name = format!("_{rest}");
+                    }
                     if fixed_name != name {
                         d.name_offset = self.add_string(&fixed_name);
                     }
@@ -2020,6 +2032,29 @@ mod tests {
         // Ensure we can convert to bytes and back again
         let raw = btf.to_bytes();
         Btf::parse(&raw, Endianness::default()).unwrap();
+    }
+
+    #[test]
+    fn test_fixup_datasec_question_mark() {
+        let fixed_name = |features: &[BtfFeature]| {
+            let mut btf = Btf::new();
+            let name = "?.struct_ops";
+            let name_offset = btf.add_string(name);
+            let datasec_type_id =
+                btf.add_type(BtfType::DataSec(DataSec::new(name_offset, Vec::new(), 8)));
+            btf.fixup_and_sanitize(&HashMap::new(), &HashMap::new(), |feature| {
+                feature == BtfFeature::DataSec || features.contains(&feature)
+            })
+            .unwrap();
+            let datasec = btf.type_by_id(datasec_type_id).unwrap();
+            btf.type_name(datasec).unwrap().into_owned()
+        };
+
+        assert_eq!(
+            fixed_name(&[BtfFeature::DataSecZero, BtfFeature::DataSecQuestionMark]),
+            "?.struct_ops"
+        );
+        assert_eq!(fixed_name(&[BtfFeature::DataSecZero]), "_.struct_ops");
     }
 
     #[test]
