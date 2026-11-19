@@ -2620,6 +2620,27 @@ impl core::marker::Unpin for aya_ebpf::programs::sockopt::SockoptContext
 impl core::marker::UnsafeUnpin for aya_ebpf::programs::sockopt::SockoptContext
 impl core::panic::unwind_safe::RefUnwindSafe for aya_ebpf::programs::sockopt::SockoptContext
 impl core::panic::unwind_safe::UnwindSafe for aya_ebpf::programs::sockopt::SockoptContext
+pub mod aya_ebpf::programs::struct_ops
+pub struct aya_ebpf::programs::struct_ops::StructOpsContext
+impl aya_ebpf::programs::struct_ops::StructOpsContext
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::arg<T: aya_ebpf::Argument>(&self, usize) -> T
+pub const fn aya_ebpf::programs::struct_ops::StructOpsContext::new(*mut core::ffi::c_void) -> Self
+impl aya_ebpf::EbpfContext for aya_ebpf::programs::struct_ops::StructOpsContext
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::as_ptr(&self) -> *mut core::ffi::c_void
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::command(&self) -> core::result::Result<[u8; 16], i32>
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::gid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::pid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::tgid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::uid(&self) -> u32
+impl core::marker::Forget for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::Freeze for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::Move for aya_ebpf::programs::struct_ops::StructOpsContext
+impl !core::marker::Send for aya_ebpf::programs::struct_ops::StructOpsContext
+impl !core::marker::Sync for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::Unpin for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::UnsafeUnpin for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::panic::unwind_safe::RefUnwindSafe for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::panic::unwind_safe::UnwindSafe for aya_ebpf::programs::struct_ops::StructOpsContext
 pub mod aya_ebpf::programs::sysctl
 pub struct aya_ebpf::programs::sysctl::SysctlContext
 pub aya_ebpf::programs::sysctl::SysctlContext::sysctl: *mut aya_ebpf_bindings::x86_64::bindings::bpf_sysctl
@@ -3170,6 +3191,26 @@ impl core::marker::Unpin for aya_ebpf::programs::sockopt::SockoptContext
 impl core::marker::UnsafeUnpin for aya_ebpf::programs::sockopt::SockoptContext
 impl core::panic::unwind_safe::RefUnwindSafe for aya_ebpf::programs::sockopt::SockoptContext
 impl core::panic::unwind_safe::UnwindSafe for aya_ebpf::programs::sockopt::SockoptContext
+pub struct aya_ebpf::programs::StructOpsContext
+impl aya_ebpf::programs::struct_ops::StructOpsContext
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::arg<T: aya_ebpf::Argument>(&self, usize) -> T
+pub const fn aya_ebpf::programs::struct_ops::StructOpsContext::new(*mut core::ffi::c_void) -> Self
+impl aya_ebpf::EbpfContext for aya_ebpf::programs::struct_ops::StructOpsContext
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::as_ptr(&self) -> *mut core::ffi::c_void
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::command(&self) -> core::result::Result<[u8; 16], i32>
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::gid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::pid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::tgid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::uid(&self) -> u32
+impl core::marker::Forget for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::Freeze for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::Move for aya_ebpf::programs::struct_ops::StructOpsContext
+impl !core::marker::Send for aya_ebpf::programs::struct_ops::StructOpsContext
+impl !core::marker::Sync for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::Unpin for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::marker::UnsafeUnpin for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::panic::unwind_safe::RefUnwindSafe for aya_ebpf::programs::struct_ops::StructOpsContext
+impl core::panic::unwind_safe::UnwindSafe for aya_ebpf::programs::struct_ops::StructOpsContext
 pub struct aya_ebpf::programs::SysctlContext
 pub aya_ebpf::programs::SysctlContext::sysctl: *mut aya_ebpf_bindings::x86_64::bindings::bpf_sysctl
 impl aya_ebpf::programs::sysctl::SysctlContext
@@ -3423,6 +3464,13 @@ pub fn aya_ebpf::programs::sockopt::SockoptContext::gid(&self) -> u32
 pub fn aya_ebpf::programs::sockopt::SockoptContext::pid(&self) -> u32
 pub fn aya_ebpf::programs::sockopt::SockoptContext::tgid(&self) -> u32
 pub fn aya_ebpf::programs::sockopt::SockoptContext::uid(&self) -> u32
+impl aya_ebpf::EbpfContext for aya_ebpf::programs::struct_ops::StructOpsContext
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::as_ptr(&self) -> *mut core::ffi::c_void
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::command(&self) -> core::result::Result<[u8; 16], i32>
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::gid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::pid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::tgid(&self) -> u32
+pub fn aya_ebpf::programs::struct_ops::StructOpsContext::uid(&self) -> u32
 impl aya_ebpf::EbpfContext for aya_ebpf::programs::sysctl::SysctlContext
 pub fn aya_ebpf::programs::sysctl::SysctlContext::as_ptr(&self) -> *mut core::ffi::c_void
 pub fn aya_ebpf::programs::sysctl::SysctlContext::command(&self) -> core::result::Result<[u8; 16], i32>

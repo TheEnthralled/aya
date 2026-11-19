@@ -22,6 +22,7 @@ mod sk_reuseport;
 mod sk_skb;
 mod sock_ops;
 mod socket_filter;
+mod struct_ops;
 mod tc;
 mod tracepoint;
 mod uprobe;
@@ -51,6 +52,7 @@ use sk_reuseport::SkReuseport;
 use sk_skb::{SkSkb, SkSkbKind};
 use sock_ops::SockOps;
 use socket_filter::SocketFilter;
+use struct_ops::StructOps;
 use tc::SchedClassifier;
 use tracepoint::TracePoint;
 use uprobe::{UProbe, UProbeKind};
@@ -797,6 +799,111 @@ pub fn sk_reuseport(attrs: TokenStream, item: TokenStream) -> TokenStream {
 pub fn cgroup_device(attrs: TokenStream, item: TokenStream) -> TokenStream {
     match CgroupDevice::parse(attrs.into(), item.into()) {
         Ok(prog) => prog.expand(),
+        Err(err) => err.into_compile_error(),
+    }
+    .into()
+}
+
+/// Marks an `impl` block as an implementation of a kernel `struct_ops` type.
+///
+/// Each function in the block becomes a `struct_ops` eBPF program, and the
+/// block as a whole becomes an instance of the struct that the kernel can
+/// register. A `tcp_congestion_ops` instance, for example, is a TCP
+/// congestion control algorithm.
+///
+/// The block is written as `impl <kernel struct> for <type>`. Its functions
+/// are named after the function pointer members of the struct they implement
+/// and take the same arguments. Its constants are named after the other
+/// members and give them a value. Both are checked against the bindings of
+/// the kernel struct in scope: a wrong name or signature is a compile error.
+/// Members the block does not define are left unset.
+///
+/// A function marked `#[sleepable]` is loaded as a sleepable program.
+///
+/// The instance is loaded and registered from userspace with
+/// `aya::Ebpf::struct_ops_mut`.
+///
+/// # Arguments
+///
+/// * `name` - the name of the instance. Defaults to the type's name in snake
+///   case.
+/// * `plain` - register the instance without a link. By default the instance
+///   is placed in `.struct_ops.link` and is registered through a link, which
+///   requires kernel 6.4.
+/// * `optional` - only create the instance when the loader is asked to.
+///
+/// # Minimum kernel version
+///
+/// The minimum kernel version required to use this feature is 5.6.
+///
+/// # Examples
+///
+/// ```no_run
+/// use aya_ebpf::{cty::c_char, macros::struct_ops};
+/// # mod vmlinux {
+/// #     #![expect(non_camel_case_types)]
+/// #     use aya_ebpf::cty::c_char;
+/// #     pub struct sock;
+/// #     #[repr(C)]
+/// #     pub struct tcp_congestion_ops {
+/// #         pub ssthresh: Option<unsafe extern "C" fn(*mut sock) -> u32>,
+/// #         pub cong_avoid: Option<unsafe extern "C" fn(*mut sock, u32, u32)>,
+/// #         pub undo_cwnd: Option<unsafe extern "C" fn(*mut sock) -> u32>,
+/// #         pub name: [c_char; 16],
+/// #     }
+/// # }
+/// use vmlinux::{sock, tcp_congestion_ops};
+///
+/// pub struct FixedWindow;
+///
+/// #[struct_ops]
+/// impl tcp_congestion_ops for FixedWindow {
+///     // Left empty here, and set from userspace before the instance is
+///     // registered.
+///     const name: [c_char; 16] = [0; 16];
+///
+///     fn ssthresh(sk: *mut sock) -> u32 {
+///         16
+///     }
+///
+///     fn cong_avoid(sk: *mut sock, ack: u32, acked: u32) {
+///         // Grow the congestion window
+///     }
+///
+///     fn undo_cwnd(sk: *mut sock) -> u32 {
+///         16
+///     }
+/// }
+/// ```
+///
+/// A function that does not match the struct's member does not compile:
+///
+/// ```compile_fail
+/// use aya_ebpf::macros::struct_ops;
+/// # mod vmlinux {
+/// #     #![expect(non_camel_case_types)]
+/// #     pub struct sock;
+/// #     #[repr(C)]
+/// #     pub struct tcp_congestion_ops {
+/// #         pub ssthresh: Option<unsafe extern "C" fn(*mut sock) -> u32>,
+/// #     }
+/// # }
+/// use vmlinux::{sock, tcp_congestion_ops};
+///
+/// pub struct FixedWindow;
+///
+/// #[struct_ops]
+/// impl tcp_congestion_ops for FixedWindow {
+///     // The kernel's `ssthresh` returns a `u32`.
+///     fn ssthresh(sk: *mut sock) -> i8 {
+///         16
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn struct_ops(attrs: TokenStream, item: TokenStream) -> TokenStream {
+    match StructOps::parse(attrs.into(), item.into()).and_then(|instance| instance.expand()) {
+        Ok(expanded) => expanded,
         Err(err) => err.into_compile_error(),
     }
     .into()
