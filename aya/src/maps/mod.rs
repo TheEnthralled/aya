@@ -92,6 +92,7 @@ pub mod sk_storage;
 pub mod sock;
 pub mod stack;
 pub mod stack_trace;
+pub mod struct_ops;
 pub mod xdp;
 
 pub use array::{Array, CgroupArray, PerCpuArray, ProgramArray};
@@ -114,6 +115,7 @@ pub use sk_storage::SkStorage;
 pub use sock::{ReusePortSockArray, SockHash, SockMap};
 pub use stack::Stack;
 pub use stack_trace::StackTraceMap;
+pub use struct_ops::{StructOps, StructOpsError};
 pub use xdp::{CpuMap, DevMap, DevMapHash, XskMap};
 
 /// Trait for constructing a typed map from [`MapData`].
@@ -1007,6 +1009,11 @@ impl MapData {
 
     pub(crate) fn finalize(&mut self) -> Result<(), MapError> {
         let Self { obj, fd } = self;
+        // Writing the value of a struct_ops map registers the instance, which
+        // has to wait until its programs are loaded.
+        if matches!(obj, aya_obj::Map::StructOps(_)) {
+            return Ok(());
+        }
         if !obj.data().is_empty() {
             bpf_map_update_elem_ptr(fd.as_fd(), &0, obj.data_mut().as_mut_ptr(), 0)
                 .map_err(|io_error| SyscallError {

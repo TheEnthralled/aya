@@ -48,6 +48,8 @@ impl core::convert::From<aya_obj::btf::BtfError> for aya_obj::KsymsError
 pub fn aya_obj::KsymsError::from(aya_obj::btf::BtfError) -> Self
 impl core::convert::From<aya_obj::btf::BtfError> for aya_obj::ParseError
 pub fn aya_obj::ParseError::from(aya_obj::btf::BtfError) -> Self
+impl core::convert::From<aya_obj::btf::BtfError> for aya_obj::maps::StructOpsError
+pub fn aya_obj::maps::StructOpsError::from(aya_obj::btf::BtfError) -> Self
 impl core::error::Error for aya_obj::btf::BtfError
 pub fn aya_obj::btf::BtfError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for aya_obj::btf::BtfError
@@ -5134,6 +5136,7 @@ pub mod aya_obj::maps
 pub enum aya_obj::maps::Map
 pub aya_obj::maps::Map::Btf(aya_obj::maps::BtfMap)
 pub aya_obj::maps::Map::Legacy(aya_obj::maps::LegacyMap)
+pub aya_obj::maps::Map::StructOps(aya_obj::maps::StructOpsMap)
 impl aya_obj::maps::Map
 pub fn aya_obj::maps::Map::data(&self) -> &[u8]
 pub fn aya_obj::maps::Map::data_mut(&mut self) -> &mut alloc::vec::Vec<u8>
@@ -5207,6 +5210,63 @@ impl core::marker::Unpin for aya_obj::maps::PinningType
 impl core::marker::UnsafeUnpin for aya_obj::maps::PinningType
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::PinningType
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::maps::PinningType
+pub enum aya_obj::maps::StructOpsError
+pub aya_obj::maps::StructOpsError::BitfieldMember
+pub aya_obj::maps::StructOpsError::BitfieldMember::member: alloc::string::String
+pub aya_obj::maps::StructOpsError::BitfieldMember::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::BtfError(aya_obj::btf::BtfError)
+pub aya_obj::maps::StructOpsError::KernelTypeNotFound
+pub aya_obj::maps::StructOpsError::KernelTypeNotFound::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::KernelTypeNotFound::type_name: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberKindMismatch
+pub aya_obj::maps::StructOpsError::MemberKindMismatch::kernel_kind: aya_obj::btf::BtfKind
+pub aya_obj::maps::StructOpsError::MemberKindMismatch::kind: aya_obj::btf::BtfKind
+pub aya_obj::maps::StructOpsError::MemberKindMismatch::member: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberKindMismatch::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberNotFound
+pub aya_obj::maps::StructOpsError::MemberNotFound::member: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberNotFound::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberNotFound::struct_name: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberOutOfBounds
+pub aya_obj::maps::StructOpsError::MemberOutOfBounds::len: usize
+pub aya_obj::maps::StructOpsError::MemberOutOfBounds::member: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberOutOfBounds::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberOutOfBounds::offset: usize
+pub aya_obj::maps::StructOpsError::MemberOutOfBounds::size: usize
+pub aya_obj::maps::StructOpsError::MemberSizeMismatch
+pub aya_obj::maps::StructOpsError::MemberSizeMismatch::kernel_size: usize
+pub aya_obj::maps::StructOpsError::MemberSizeMismatch::member: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberSizeMismatch::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::MemberSizeMismatch::size: usize
+pub aya_obj::maps::StructOpsError::NoBtf
+pub aya_obj::maps::StructOpsError::NotAFunctionPointer
+pub aya_obj::maps::StructOpsError::NotAFunctionPointer::member: alloc::string::String
+pub aya_obj::maps::StructOpsError::NotAFunctionPointer::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::ProgramReuse
+pub aya_obj::maps::StructOpsError::ProgramReuse::attach_target: aya_obj::programs::StructOpsAttachTarget
+pub aya_obj::maps::StructOpsError::ProgramReuse::other_attach_target: aya_obj::programs::StructOpsAttachTarget
+pub aya_obj::maps::StructOpsError::ProgramReuse::program: alloc::string::String
+pub aya_obj::maps::StructOpsError::WrapperDataMemberNotFound
+pub aya_obj::maps::StructOpsError::WrapperDataMemberNotFound::name: alloc::string::String
+pub aya_obj::maps::StructOpsError::WrapperDataMemberNotFound::struct_name: alloc::string::String
+pub aya_obj::maps::StructOpsError::WrapperDataMemberNotFound::wrapper_name: alloc::string::String
+impl core::convert::From<aya_obj::btf::BtfError> for aya_obj::maps::StructOpsError
+pub fn aya_obj::maps::StructOpsError::from(aya_obj::btf::BtfError) -> Self
+impl core::error::Error for aya_obj::maps::StructOpsError
+pub fn aya_obj::maps::StructOpsError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for aya_obj::maps::StructOpsError
+pub fn aya_obj::maps::StructOpsError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for aya_obj::maps::StructOpsError
+pub fn aya_obj::maps::StructOpsError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Forget for aya_obj::maps::StructOpsError
+impl core::marker::Freeze for aya_obj::maps::StructOpsError
+impl core::marker::Move for aya_obj::maps::StructOpsError
+impl core::marker::Send for aya_obj::maps::StructOpsError
+impl core::marker::Sync for aya_obj::maps::StructOpsError
+impl core::marker::Unpin for aya_obj::maps::StructOpsError
+impl core::marker::UnsafeUnpin for aya_obj::maps::StructOpsError
+impl !core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::StructOpsError
+impl !core::panic::unwind_safe::UnwindSafe for aya_obj::maps::StructOpsError
 pub struct aya_obj::maps::BtfMap
 pub aya_obj::maps::BtfMap::def: aya_obj::maps::BtfMapDef
 impl core::clone::Clone for aya_obj::maps::BtfMap
@@ -5266,6 +5326,107 @@ impl core::marker::Unpin for aya_obj::maps::LegacyMap
 impl core::marker::UnsafeUnpin for aya_obj::maps::LegacyMap
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::LegacyMap
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::maps::LegacyMap
+pub struct aya_obj::maps::StructOpsFnPtrMember
+pub aya_obj::maps::StructOpsFnPtrMember::bit_offset: usize
+pub aya_obj::maps::StructOpsFnPtrMember::name: alloc::string::String
+pub aya_obj::maps::StructOpsFnPtrMember::program: core::option::Option<alloc::string::String>
+impl core::clone::Clone for aya_obj::maps::StructOpsFnPtrMember
+pub fn aya_obj::maps::StructOpsFnPtrMember::clone(&self) -> Self
+impl core::fmt::Debug for aya_obj::maps::StructOpsFnPtrMember
+pub fn aya_obj::maps::StructOpsFnPtrMember::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Forget for aya_obj::maps::StructOpsFnPtrMember
+impl core::marker::Freeze for aya_obj::maps::StructOpsFnPtrMember
+impl core::marker::Move for aya_obj::maps::StructOpsFnPtrMember
+impl core::marker::Send for aya_obj::maps::StructOpsFnPtrMember
+impl core::marker::Sync for aya_obj::maps::StructOpsFnPtrMember
+impl core::marker::Unpin for aya_obj::maps::StructOpsFnPtrMember
+impl core::marker::UnsafeUnpin for aya_obj::maps::StructOpsFnPtrMember
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::StructOpsFnPtrMember
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::maps::StructOpsFnPtrMember
+pub struct aya_obj::maps::StructOpsInfo
+pub aya_obj::maps::StructOpsInfo::data: alloc::vec::Vec<u8>
+pub aya_obj::maps::StructOpsInfo::func_ptrs: alloc::vec::Vec<aya_obj::maps::StructOpsFnPtrMember>
+pub aya_obj::maps::StructOpsInfo::is_link: bool
+pub aya_obj::maps::StructOpsInfo::is_optional: bool
+pub aya_obj::maps::StructOpsInfo::section_index: usize
+pub aya_obj::maps::StructOpsInfo::struct_name: alloc::string::String
+pub aya_obj::maps::StructOpsInfo::symbol_index: usize
+pub aya_obj::maps::StructOpsInfo::type_id: u32
+impl core::clone::Clone for aya_obj::maps::StructOpsInfo
+pub fn aya_obj::maps::StructOpsInfo::clone(&self) -> Self
+impl core::fmt::Debug for aya_obj::maps::StructOpsInfo
+pub fn aya_obj::maps::StructOpsInfo::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Forget for aya_obj::maps::StructOpsInfo
+impl core::marker::Freeze for aya_obj::maps::StructOpsInfo
+impl core::marker::Move for aya_obj::maps::StructOpsInfo
+impl core::marker::Send for aya_obj::maps::StructOpsInfo
+impl core::marker::Sync for aya_obj::maps::StructOpsInfo
+impl core::marker::Unpin for aya_obj::maps::StructOpsInfo
+impl core::marker::UnsafeUnpin for aya_obj::maps::StructOpsInfo
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::StructOpsInfo
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::maps::StructOpsInfo
+pub struct aya_obj::maps::StructOpsMap
+pub aya_obj::maps::StructOpsMap::btf_vmlinux_value_type_id: u32
+pub aya_obj::maps::StructOpsMap::data: alloc::vec::Vec<u8>
+pub aya_obj::maps::StructOpsMap::def: aya_obj::maps::BtfMapDef
+pub aya_obj::maps::StructOpsMap::is_link: bool
+pub aya_obj::maps::StructOpsMap::is_optional: bool
+pub aya_obj::maps::StructOpsMap::members: alloc::vec::Vec<aya_obj::maps::StructOpsMember>
+pub aya_obj::maps::StructOpsMap::programs: alloc::vec::Vec<aya_obj::maps::StructOpsProgramSlot>
+pub aya_obj::maps::StructOpsMap::section_index: usize
+pub aya_obj::maps::StructOpsMap::struct_name: alloc::string::String
+pub aya_obj::maps::StructOpsMap::symbol_index: usize
+impl core::clone::Clone for aya_obj::maps::StructOpsMap
+pub fn aya_obj::maps::StructOpsMap::clone(&self) -> Self
+impl core::fmt::Debug for aya_obj::maps::StructOpsMap
+pub fn aya_obj::maps::StructOpsMap::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Forget for aya_obj::maps::StructOpsMap
+impl core::marker::Freeze for aya_obj::maps::StructOpsMap
+impl core::marker::Move for aya_obj::maps::StructOpsMap
+impl core::marker::Send for aya_obj::maps::StructOpsMap
+impl core::marker::Sync for aya_obj::maps::StructOpsMap
+impl core::marker::Unpin for aya_obj::maps::StructOpsMap
+impl core::marker::UnsafeUnpin for aya_obj::maps::StructOpsMap
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::StructOpsMap
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::maps::StructOpsMap
+pub struct aya_obj::maps::StructOpsMember
+pub aya_obj::maps::StructOpsMember::name: alloc::string::String
+pub aya_obj::maps::StructOpsMember::size: usize
+pub aya_obj::maps::StructOpsMember::value_offset: usize
+impl core::clone::Clone for aya_obj::maps::StructOpsMember
+pub fn aya_obj::maps::StructOpsMember::clone(&self) -> Self
+impl core::cmp::Eq for aya_obj::maps::StructOpsMember
+impl core::cmp::PartialEq for aya_obj::maps::StructOpsMember
+pub fn aya_obj::maps::StructOpsMember::eq(&self, &Self) -> bool
+impl core::fmt::Debug for aya_obj::maps::StructOpsMember
+pub fn aya_obj::maps::StructOpsMember::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for aya_obj::maps::StructOpsMember
+impl core::marker::Forget for aya_obj::maps::StructOpsMember
+impl core::marker::Freeze for aya_obj::maps::StructOpsMember
+impl core::marker::Move for aya_obj::maps::StructOpsMember
+impl core::marker::Send for aya_obj::maps::StructOpsMember
+impl core::marker::Sync for aya_obj::maps::StructOpsMember
+impl core::marker::Unpin for aya_obj::maps::StructOpsMember
+impl core::marker::UnsafeUnpin for aya_obj::maps::StructOpsMember
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::StructOpsMember
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::maps::StructOpsMember
+pub struct aya_obj::maps::StructOpsProgramSlot
+pub aya_obj::maps::StructOpsProgramSlot::member_name: alloc::string::String
+pub aya_obj::maps::StructOpsProgramSlot::program: alloc::string::String
+pub aya_obj::maps::StructOpsProgramSlot::value_offset: usize
+impl core::clone::Clone for aya_obj::maps::StructOpsProgramSlot
+pub fn aya_obj::maps::StructOpsProgramSlot::clone(&self) -> Self
+impl core::fmt::Debug for aya_obj::maps::StructOpsProgramSlot
+pub fn aya_obj::maps::StructOpsProgramSlot::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Forget for aya_obj::maps::StructOpsProgramSlot
+impl core::marker::Freeze for aya_obj::maps::StructOpsProgramSlot
+impl core::marker::Move for aya_obj::maps::StructOpsProgramSlot
+impl core::marker::Send for aya_obj::maps::StructOpsProgramSlot
+impl core::marker::Sync for aya_obj::maps::StructOpsProgramSlot
+impl core::marker::Unpin for aya_obj::maps::StructOpsProgramSlot
+impl core::marker::UnsafeUnpin for aya_obj::maps::StructOpsProgramSlot
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::maps::StructOpsProgramSlot
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::maps::StructOpsProgramSlot
 #[repr(C)] pub struct aya_obj::maps::bpf_map_def
 pub aya_obj::maps::bpf_map_def::id: u32
 pub aya_obj::maps::bpf_map_def::key_size: u32
@@ -5305,6 +5466,7 @@ pub aya_obj::obj::EbpfSectionKind::License
 pub aya_obj::obj::EbpfSectionKind::Maps
 pub aya_obj::obj::EbpfSectionKind::Program
 pub aya_obj::obj::EbpfSectionKind::Rodata
+pub aya_obj::obj::EbpfSectionKind::StructOps
 pub aya_obj::obj::EbpfSectionKind::Text
 pub aya_obj::obj::EbpfSectionKind::Undefined
 pub aya_obj::obj::EbpfSectionKind::Version
@@ -5342,6 +5504,9 @@ pub aya_obj::obj::ParseError::InvalidMapDefinition::name: alloc::string::String
 pub aya_obj::obj::ParseError::InvalidProgramCode
 pub aya_obj::obj::ParseError::InvalidProgramSection
 pub aya_obj::obj::ParseError::InvalidProgramSection::section: alloc::string::String
+pub aya_obj::obj::ParseError::InvalidRelocation
+pub aya_obj::obj::ParseError::InvalidRelocation::offset: usize
+pub aya_obj::obj::ParseError::InvalidRelocation::section: alloc::string::String
 pub aya_obj::obj::ParseError::InvalidSymbol
 pub aya_obj::obj::ParseError::InvalidSymbol::index: usize
 pub aya_obj::obj::ParseError::InvalidSymbol::name: core::option::Option<alloc::string::String>
@@ -5354,9 +5519,20 @@ pub aya_obj::obj::ParseError::MissingLicenseNullTerminator::data: alloc::vec::Ve
 pub aya_obj::obj::ParseError::NoBTF
 pub aya_obj::obj::ParseError::NoSymbolsForSection
 pub aya_obj::obj::ParseError::NoSymbolsForSection::section_name: alloc::string::String
+pub aya_obj::obj::ParseError::NoValidRelocationFound
+pub aya_obj::obj::ParseError::NoValidRelocationFound::name: alloc::string::String
+pub aya_obj::obj::ParseError::NoValidRelocationFound::offset: u64
+pub aya_obj::obj::ParseError::NoValidRelocationFound::section: alloc::string::String
 pub aya_obj::obj::ParseError::SectionError
 pub aya_obj::obj::ParseError::SectionError::error: object::read::Error
 pub aya_obj::obj::ParseError::SectionError::index: usize
+pub aya_obj::obj::ParseError::StructOpsInstanceOverlap
+pub aya_obj::obj::ParseError::StructOpsInstanceOverlap::name: alloc::string::String
+pub aya_obj::obj::ParseError::StructOpsInstanceOverlap::other_name: alloc::string::String
+pub aya_obj::obj::ParseError::StructOpsProgramReuse
+pub aya_obj::obj::ParseError::StructOpsProgramReuse::member_name: alloc::string::String
+pub aya_obj::obj::ParseError::StructOpsProgramReuse::other_member_name: alloc::string::String
+pub aya_obj::obj::ParseError::StructOpsProgramReuse::program: alloc::string::String
 pub aya_obj::obj::ParseError::SymbolNotFound
 pub aya_obj::obj::ParseError::SymbolNotFound::name: alloc::string::String
 pub aya_obj::obj::ParseError::SymbolTableConflict
@@ -5420,6 +5596,8 @@ pub aya_obj::obj::ProgramSection::SkSkbStream
 pub aya_obj::obj::ProgramSection::SkSkbStream::kind: aya_obj::programs::sk_skb::SkSkbKind
 pub aya_obj::obj::ProgramSection::SockOps
 pub aya_obj::obj::ProgramSection::SocketFilter
+pub aya_obj::obj::ProgramSection::StructOps
+pub aya_obj::obj::ProgramSection::StructOps::sleepable: bool
 pub aya_obj::obj::ProgramSection::TracePoint
 pub aya_obj::obj::ProgramSection::UProbe
 pub aya_obj::obj::ProgramSection::UProbe::multi: bool
@@ -5489,12 +5667,15 @@ pub aya_obj::obj::Object::kernel_version: core::option::Option<u32>
 pub aya_obj::obj::Object::license: alloc::ffi::c_str::CString
 pub aya_obj::obj::Object::maps: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::maps::Map>
 pub aya_obj::obj::Object::programs: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::Program>
+pub aya_obj::obj::Object::struct_ops: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::maps::StructOpsInfo>
+pub aya_obj::obj::Object::struct_ops_attachments: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::programs::StructOpsAttachment>
 impl aya_obj::Object
 pub fn aya_obj::Object::fixup_and_sanitize_btf<F>(&mut self, impl core::ops::function::FnOnce() -> core::option::Option<F>) -> core::result::Result<core::option::Option<&aya_obj::btf::Btf>, aya_obj::btf::BtfError> where F: core::ops::function::FnMut(aya_obj::btf::BtfFeature) -> bool
 impl aya_obj::Object
 pub fn aya_obj::Object::has_btf_relocations(&self) -> bool
 pub fn aya_obj::Object::parse(&[u8]) -> core::result::Result<Self, aya_obj::ParseError>
 pub fn aya_obj::Object::patch_map_data(&mut self, std::collections::hash::map::HashMap<&str, (&[u8], bool)>) -> core::result::Result<(), aya_obj::ParseError>
+pub fn aya_obj::Object::resolve_struct_ops(&mut self, &aya_obj::btf::Btf, &std::collections::hash::set::HashSet<&str>) -> core::result::Result<(), aya_obj::maps::StructOpsError>
 pub fn aya_obj::Object::sanitize_functions(&mut self, impl core::ops::function::FnOnce() -> bool)
 impl aya_obj::Object
 pub fn aya_obj::Object::has_strong_typed_ksyms(&self) -> bool
@@ -5846,6 +6027,48 @@ impl core::marker::Unpin for aya_obj::programs::xdp::XdpAttachType
 impl core::marker::UnsafeUnpin for aya_obj::programs::xdp::XdpAttachType
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::programs::xdp::XdpAttachType
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::programs::xdp::XdpAttachType
+pub struct aya_obj::programs::StructOpsAttachTarget
+pub aya_obj::programs::StructOpsAttachTarget::kernel_type_id: u32
+pub aya_obj::programs::StructOpsAttachTarget::member_index: u32
+impl core::clone::Clone for aya_obj::programs::StructOpsAttachTarget
+pub fn aya_obj::programs::StructOpsAttachTarget::clone(&self) -> Self
+impl core::cmp::Eq for aya_obj::programs::StructOpsAttachTarget
+impl core::cmp::PartialEq for aya_obj::programs::StructOpsAttachTarget
+pub fn aya_obj::programs::StructOpsAttachTarget::eq(&self, &Self) -> bool
+impl core::fmt::Debug for aya_obj::programs::StructOpsAttachTarget
+pub fn aya_obj::programs::StructOpsAttachTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::StructuralPartialEq for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::Forget for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::Freeze for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::Move for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::Send for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::Sync for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::Unpin for aya_obj::programs::StructOpsAttachTarget
+impl core::marker::UnsafeUnpin for aya_obj::programs::StructOpsAttachTarget
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::programs::StructOpsAttachTarget
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::programs::StructOpsAttachTarget
+pub struct aya_obj::programs::StructOpsAttachment
+pub aya_obj::programs::StructOpsAttachment::attach_target: core::option::Option<aya_obj::programs::StructOpsAttachTarget>
+pub aya_obj::programs::StructOpsAttachment::member_name: alloc::string::String
+pub aya_obj::programs::StructOpsAttachment::type_id: u32
+impl core::clone::Clone for aya_obj::programs::StructOpsAttachment
+pub fn aya_obj::programs::StructOpsAttachment::clone(&self) -> Self
+impl core::cmp::Eq for aya_obj::programs::StructOpsAttachment
+impl core::cmp::PartialEq for aya_obj::programs::StructOpsAttachment
+pub fn aya_obj::programs::StructOpsAttachment::eq(&self, &Self) -> bool
+impl core::fmt::Debug for aya_obj::programs::StructOpsAttachment
+pub fn aya_obj::programs::StructOpsAttachment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for aya_obj::programs::StructOpsAttachment
+impl core::marker::Forget for aya_obj::programs::StructOpsAttachment
+impl core::marker::Freeze for aya_obj::programs::StructOpsAttachment
+impl core::marker::Move for aya_obj::programs::StructOpsAttachment
+impl core::marker::Send for aya_obj::programs::StructOpsAttachment
+impl core::marker::Sync for aya_obj::programs::StructOpsAttachment
+impl core::marker::Unpin for aya_obj::programs::StructOpsAttachment
+impl core::marker::UnsafeUnpin for aya_obj::programs::StructOpsAttachment
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::programs::StructOpsAttachment
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::programs::StructOpsAttachment
 pub mod aya_obj::relocation
 pub enum aya_obj::relocation::RelocationError
 pub aya_obj::relocation::RelocationError::ExternNotFound
@@ -5909,6 +6132,7 @@ pub aya_obj::EbpfSectionKind::License
 pub aya_obj::EbpfSectionKind::Maps
 pub aya_obj::EbpfSectionKind::Program
 pub aya_obj::EbpfSectionKind::Rodata
+pub aya_obj::EbpfSectionKind::StructOps
 pub aya_obj::EbpfSectionKind::Text
 pub aya_obj::EbpfSectionKind::Undefined
 pub aya_obj::EbpfSectionKind::Version
@@ -5971,6 +6195,7 @@ impl !core::panic::unwind_safe::UnwindSafe for aya_obj::KsymsError
 pub enum aya_obj::Map
 pub aya_obj::Map::Btf(aya_obj::maps::BtfMap)
 pub aya_obj::Map::Legacy(aya_obj::maps::LegacyMap)
+pub aya_obj::Map::StructOps(aya_obj::maps::StructOpsMap)
 impl aya_obj::maps::Map
 pub fn aya_obj::maps::Map::data(&self) -> &[u8]
 pub fn aya_obj::maps::Map::data_mut(&mut self) -> &mut alloc::vec::Vec<u8>
@@ -6017,6 +6242,9 @@ pub aya_obj::ParseError::InvalidMapDefinition::name: alloc::string::String
 pub aya_obj::ParseError::InvalidProgramCode
 pub aya_obj::ParseError::InvalidProgramSection
 pub aya_obj::ParseError::InvalidProgramSection::section: alloc::string::String
+pub aya_obj::ParseError::InvalidRelocation
+pub aya_obj::ParseError::InvalidRelocation::offset: usize
+pub aya_obj::ParseError::InvalidRelocation::section: alloc::string::String
 pub aya_obj::ParseError::InvalidSymbol
 pub aya_obj::ParseError::InvalidSymbol::index: usize
 pub aya_obj::ParseError::InvalidSymbol::name: core::option::Option<alloc::string::String>
@@ -6029,9 +6257,20 @@ pub aya_obj::ParseError::MissingLicenseNullTerminator::data: alloc::vec::Vec<u8>
 pub aya_obj::ParseError::NoBTF
 pub aya_obj::ParseError::NoSymbolsForSection
 pub aya_obj::ParseError::NoSymbolsForSection::section_name: alloc::string::String
+pub aya_obj::ParseError::NoValidRelocationFound
+pub aya_obj::ParseError::NoValidRelocationFound::name: alloc::string::String
+pub aya_obj::ParseError::NoValidRelocationFound::offset: u64
+pub aya_obj::ParseError::NoValidRelocationFound::section: alloc::string::String
 pub aya_obj::ParseError::SectionError
 pub aya_obj::ParseError::SectionError::error: object::read::Error
 pub aya_obj::ParseError::SectionError::index: usize
+pub aya_obj::ParseError::StructOpsInstanceOverlap
+pub aya_obj::ParseError::StructOpsInstanceOverlap::name: alloc::string::String
+pub aya_obj::ParseError::StructOpsInstanceOverlap::other_name: alloc::string::String
+pub aya_obj::ParseError::StructOpsProgramReuse
+pub aya_obj::ParseError::StructOpsProgramReuse::member_name: alloc::string::String
+pub aya_obj::ParseError::StructOpsProgramReuse::other_member_name: alloc::string::String
+pub aya_obj::ParseError::StructOpsProgramReuse::program: alloc::string::String
 pub aya_obj::ParseError::SymbolNotFound
 pub aya_obj::ParseError::SymbolNotFound::name: alloc::string::String
 pub aya_obj::ParseError::SymbolTableConflict
@@ -6095,6 +6334,8 @@ pub aya_obj::ProgramSection::SkSkbStream
 pub aya_obj::ProgramSection::SkSkbStream::kind: aya_obj::programs::sk_skb::SkSkbKind
 pub aya_obj::ProgramSection::SockOps
 pub aya_obj::ProgramSection::SocketFilter
+pub aya_obj::ProgramSection::StructOps
+pub aya_obj::ProgramSection::StructOps::sleepable: bool
 pub aya_obj::ProgramSection::TracePoint
 pub aya_obj::ProgramSection::UProbe
 pub aya_obj::ProgramSection::UProbe::multi: bool
@@ -6164,12 +6405,15 @@ pub aya_obj::Object::kernel_version: core::option::Option<u32>
 pub aya_obj::Object::license: alloc::ffi::c_str::CString
 pub aya_obj::Object::maps: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::maps::Map>
 pub aya_obj::Object::programs: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::Program>
+pub aya_obj::Object::struct_ops: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::maps::StructOpsInfo>
+pub aya_obj::Object::struct_ops_attachments: std::collections::hash::map::HashMap<alloc::string::String, aya_obj::programs::StructOpsAttachment>
 impl aya_obj::Object
 pub fn aya_obj::Object::fixup_and_sanitize_btf<F>(&mut self, impl core::ops::function::FnOnce() -> core::option::Option<F>) -> core::result::Result<core::option::Option<&aya_obj::btf::Btf>, aya_obj::btf::BtfError> where F: core::ops::function::FnMut(aya_obj::btf::BtfFeature) -> bool
 impl aya_obj::Object
 pub fn aya_obj::Object::has_btf_relocations(&self) -> bool
 pub fn aya_obj::Object::parse(&[u8]) -> core::result::Result<Self, aya_obj::ParseError>
 pub fn aya_obj::Object::patch_map_data(&mut self, std::collections::hash::map::HashMap<&str, (&[u8], bool)>) -> core::result::Result<(), aya_obj::ParseError>
+pub fn aya_obj::Object::resolve_struct_ops(&mut self, &aya_obj::btf::Btf, &std::collections::hash::set::HashSet<&str>) -> core::result::Result<(), aya_obj::maps::StructOpsError>
 pub fn aya_obj::Object::sanitize_functions(&mut self, impl core::ops::function::FnOnce() -> bool)
 impl aya_obj::Object
 pub fn aya_obj::Object::has_strong_typed_ksyms(&self) -> bool

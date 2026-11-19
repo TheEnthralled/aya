@@ -112,6 +112,13 @@ pub(crate) fn bpf_create_map(
         }
     }
 
+    if let aya_obj::Map::StructOps(m) = def {
+        // The value is a type of the kernel's, named by its id in the kernel's
+        // BTF. The kernel still requires the object's BTF alongside it.
+        u.btf_vmlinux_value_type_id = m.btf_vmlinux_value_type_id;
+        u.btf_fd = btf_fd.map_or_default(|fd| fd.as_raw_fd()) as u32;
+    }
+
     // The contents of a data section are described by a DATASEC. Passing it
     // lets the kernel find the fields it gives a meaning to, such as a
     // `bpf_spin_lock` in a global variable. The verifier refuses programs
@@ -176,7 +183,7 @@ pub(crate) struct EbpfLoadProgramAttrs<'a> {
     pub(crate) insns: &'a [bpf_insn],
     pub(crate) license: &'a CStr,
     pub(crate) kernel_version: u32,
-    pub(crate) expected_attach_type: Option<bpf_attach_type>,
+    pub(crate) expected_attach_type: Option<u32>,
     pub(crate) prog_btf_fd: Option<BorrowedFd<'a>>,
     pub(crate) attach_btf_obj_fd: Option<BorrowedFd<'a>>,
     pub(crate) attach_btf_id: Option<u32>,
@@ -207,7 +214,7 @@ pub(crate) fn bpf_load_program(
     u.prog_flags = aya_attr.flags;
     u.prog_type = aya_attr.ty as u32;
     if let Some(v) = aya_attr.expected_attach_type {
-        u.expected_attach_type = v as u32;
+        u.expected_attach_type = v;
     }
     u.insns = aya_attr.insns.as_ptr().expose_provenance() as u64;
     u.insn_cnt = aya_attr.insns.len() as u32;

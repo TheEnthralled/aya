@@ -51,6 +51,21 @@ impl Fwd {
     pub(crate) const fn type_info_size(&self) -> usize {
         size_of::<Self>()
     }
+
+    // We can only forward to either a struct or union type.
+    #[cfg(test)]
+    pub(crate) const fn new(name_offset: u32, is_union: bool) -> Self {
+        let mut info = (BtfKind::Fwd as u32) << 24;
+        if is_union {
+            info |= 1 << 31;
+        }
+
+        Self {
+            name_offset,
+            info,
+            _unused: 0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -386,8 +401,6 @@ impl Int {
         (self.data & 0x00ff0000) >> 16
     }
 
-    // TODO: Remove directive this when this crate is pub
-    #[cfg(test)]
     pub(crate) const fn bits(&self) -> u32 {
         self.data & 0x000000ff
     }

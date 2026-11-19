@@ -1,6 +1,11 @@
 //! Map struct and type bindings.
 
-use crate::{EbpfSectionKind, InvalidTypeBinding, generated::bpf_map_type};
+use crate::{
+    EbpfSectionKind, InvalidTypeBinding,
+    btf::{BtfError, BtfKind},
+    generated::bpf_map_type,
+    programs::StructOpsAttachTarget,
+};
 
 impl TryFrom<u32> for bpf_map_type {
     type Error = InvalidTypeBinding<u32>;
@@ -135,6 +140,228 @@ pub struct bpf_map_def {
 /// The first five __u32 of `bpf_map_def` must be defined.
 pub(crate) const MINIMUM_MAP_SIZE: usize = size_of::<u32>() * 5;
 
+/// A `struct_ops` instance as found in the object file, before it is resolved
+/// against the kernel's BTF.
+#[derive(Clone, Debug)]
+pub struct StructOpsInfo {
+    /// The BTF type id of the instance's struct in the object's BTF.
+    pub type_id: u32,
+    /// The name of the struct type, e.g. `tcp_congestion_ops`.
+    pub struct_name: String,
+    /// Whether the instance is in a `.struct_ops.link` section rather than a
+    /// `.struct_ops` one.
+    pub is_link: bool,
+    /// Whether the section name starts with `?`.
+    pub is_optional: bool,
+    /// The instance's bytes from the section. Function pointer members are
+    /// filled in by relocations, so they are zero here.
+    pub data: Vec<u8>,
+    /// Index of the ELF section holding the instance.
+    pub section_index: usize,
+    /// Index of the instance's symbol in the symbol table.
+    pub symbol_index: usize,
+    /// The members of the struct that are function pointers. A member that
+    /// no program implements has no program.
+    pub func_ptrs: Vec<StructOpsFnPtrMember>,
+}
+
+/// A member of a `struct_ops` struct that is a function pointer.
+#[derive(Clone, Debug)]
+pub struct StructOpsFnPtrMember {
+    /// Member name.
+    pub name: String,
+    /// Bit offset of the member from the start of the struct.
+    pub bit_offset: usize,
+    /// Name of the `struct_ops` program the member points to, if any.
+    pub program: Option<String>,
+}
+
+/// A `struct_ops` instance resolved against the kernel's BTF, ready to be
+/// created as a `BPF_MAP_TYPE_STRUCT_OPS` map.
+#[derive(Clone, Debug)]
+pub struct StructOpsMap {
+    /// The map's definition: a single entry with a 4 byte key, whose value is
+    /// the kernel's `bpf_struct_ops_<struct_name>`. The flags hold
+    /// `BPF_F_LINK` for an instance from a `.struct_ops.link` section.
+    pub def: BtfMapDef,
+    /// Index of the ELF section holding the instance.
+    pub section_index: usize,
+    /// Index of the instance's symbol in the symbol table.
+    pub symbol_index: usize,
+    /// Kernel BTF id of `bpf_struct_ops_<struct_name>`, passed as
+    /// `btf_vmlinux_value_type_id` when the map is created.
+    pub btf_vmlinux_value_type_id: u32,
+    /// The map value in the kernel's layout, `def.value_size` bytes long.
+    /// Members that are not function pointers are already copied in. Function
+    /// pointers are zero until the loader writes the programs' file
+    /// descriptors.
+    pub data: Vec<u8>,
+    /// Function pointer members that a program implements.
+    pub programs: Vec<StructOpsProgramSlot>,
+    /// Members of the kernel's struct that are not function pointers. Their
+    /// bytes in `data` can be replaced until the instance is registered.
+    pub members: Vec<StructOpsMember>,
+    /// The name of the struct type, e.g. `tcp_congestion_ops`.
+    pub struct_name: String,
+    /// Whether the instance is in a `.struct_ops.link` section rather than a
+    /// `.struct_ops` one.
+    pub is_link: bool,
+    /// Whether the section name starts with `?`.
+    pub is_optional: bool,
+}
+
+/// A member of a kernel `struct_ops` type that is not a function pointer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StructOpsMember {
+    /// Member name, e.g. `name`.
+    pub name: String,
+    /// Byte offset of the member from the start of the map value. This
+    /// already includes the offset of the wrapper's `data` member.
+    pub value_offset: usize,
+    /// Size of the member in bytes.
+    pub size: usize,
+}
+
+/// Where the file descriptor of one program goes in a `struct_ops` map value.
+#[derive(Clone, Debug)]
+pub struct StructOpsProgramSlot {
+    /// Member name, e.g. `cong_avoid`.
+    pub member_name: String,
+    /// Name of the program implementing the member.
+    pub program: String,
+    /// Byte offset of the member from the start of the map value. This
+    /// already includes the offset of the wrapper's `data` member.
+    pub value_offset: usize,
+}
+
+/// Errors raised while resolving `struct_ops` instances against the kernel's BTF.
+#[derive(Debug, thiserror::Error)]
+pub enum StructOpsError {
+    /// The object defines `struct_ops` instances but carries no BTF.
+    #[error("the object has struct_ops instances but no BTF")]
+    NoBtf,
+
+    /// Error reading the object's or the kernel's BTF.
+    #[error("BTF error")]
+    BtfError(#[from] BtfError),
+
+    /// The kernel's BTF has no struct with this name. For the
+    /// `bpf_struct_ops_` wrapper this means the kernel does not support the
+    /// `struct_ops` type.
+    #[error("struct_ops `{name}`: struct `{type_name}` not found in kernel BTF")]
+    KernelTypeNotFound {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The struct that was looked up.
+        type_name: String,
+    },
+
+    /// The kernel's wrapper struct has no member holding the `struct_ops` type.
+    #[error(
+        "struct_ops `{name}`: kernel struct `{wrapper_name}` has no member of type `{struct_name}`"
+    )]
+    WrapperDataMemberNotFound {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The kernel's wrapper struct.
+        wrapper_name: String,
+        /// The `struct_ops` type.
+        struct_name: String,
+    },
+
+    /// The instance sets a member the kernel's struct does not have.
+    #[error(
+        "struct_ops `{name}`: member `{member}` is set but the kernel's `{struct_name}` has no such member"
+    )]
+    MemberNotFound {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The `struct_ops` type.
+        struct_name: String,
+        /// The member.
+        member: String,
+    },
+
+    /// Bitfield members cannot be translated to the kernel's layout.
+    #[error("struct_ops `{name}`: member `{member}` is a bitfield, which is not supported")]
+    BitfieldMember {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The member.
+        member: String,
+    },
+
+    /// The member's type is of a different kind in the object and the kernel.
+    #[error(
+        "struct_ops `{name}`: member `{member}` has kind {kind:?} but the kernel's has kind {kernel_kind:?}"
+    )]
+    MemberKindMismatch {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The member.
+        member: String,
+        /// Kind of the member's type in the object.
+        kind: BtfKind,
+        /// Kind of the member's type in the kernel.
+        kernel_kind: BtfKind,
+    },
+
+    /// The member's type has a different size in the object and the kernel.
+    #[error(
+        "struct_ops `{name}`: member `{member}` is {size} bytes but the kernel's is {kernel_size} bytes"
+    )]
+    MemberSizeMismatch {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The member.
+        member: String,
+        /// Size of the member in the object.
+        size: usize,
+        /// Size of the member in the kernel.
+        kernel_size: usize,
+    },
+
+    /// The member does not fit in the instance's bytes or in the map value.
+    #[error(
+        "struct_ops `{name}`: member `{member}` at offset {offset} with size {size} does not fit in {len} bytes"
+    )]
+    MemberOutOfBounds {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The member.
+        member: String,
+        /// Byte offset of the member.
+        offset: usize,
+        /// Size of the member in bytes.
+        size: usize,
+        /// Number of bytes available.
+        len: usize,
+    },
+
+    /// A program implements a member that is not a function pointer in the
+    /// kernel's struct.
+    #[error("struct_ops `{name}`: kernel member `{member}` is not a function pointer")]
+    NotAFunctionPointer {
+        /// The `struct_ops` instance.
+        name: String,
+        /// The member.
+        member: String,
+    },
+
+    /// A program backs two different kernel struct types or members.
+    #[error(
+        "struct_ops program `{program}` is used as {attach_target:?} and as {other_attach_target:?}"
+    )]
+    ProgramReuse {
+        /// The program.
+        program: String,
+        /// The kernel struct type and member being assigned.
+        attach_target: StructOpsAttachTarget,
+        /// The kernel struct type and member assigned earlier.
+        other_attach_target: StructOpsAttachTarget,
+    },
+}
+
 /// Map data defined in `maps` or `.maps` sections
 #[derive(Debug, Clone)]
 pub enum Map {
@@ -142,6 +369,8 @@ pub enum Map {
     Legacy(LegacyMap),
     /// A map defined in the `.maps` section
     Btf(BtfMap),
+    /// `struct_ops` instance that will be loaded as a map.
+    StructOps(StructOpsMap),
 }
 
 impl Map {
@@ -150,6 +379,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.map_type,
             Self::Btf(m) => m.def.map_type,
+            Self::StructOps(m) => m.def.map_type,
         }
     }
 
@@ -158,6 +388,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.key_size,
             Self::Btf(m) => m.def.key_size,
+            Self::StructOps(m) => m.def.key_size,
         }
     }
 
@@ -166,6 +397,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.value_size,
             Self::Btf(m) => m.def.value_size,
+            Self::StructOps(m) => m.def.value_size,
         }
     }
 
@@ -174,6 +406,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.value_size = size,
             Self::Btf(m) => m.def.value_size = size,
+            Self::StructOps(m) => m.def.value_size = size,
         }
     }
 
@@ -182,6 +415,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.max_entries,
             Self::Btf(m) => m.def.max_entries,
+            Self::StructOps(m) => m.def.max_entries,
         }
     }
 
@@ -190,6 +424,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.max_entries = v,
             Self::Btf(m) => m.def.max_entries = v,
+            Self::StructOps(m) => m.def.max_entries = v,
         }
     }
 
@@ -198,6 +433,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.map_flags,
             Self::Btf(m) => m.def.map_flags,
+            Self::StructOps(m) => m.def.map_flags,
         }
     }
 
@@ -206,6 +442,7 @@ impl Map {
         match self {
             Self::Legacy(_) => 0,
             Self::Btf(m) => m.def.map_extra,
+            Self::StructOps(m) => m.def.map_extra,
         }
     }
 
@@ -214,6 +451,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.def.pinning,
             Self::Btf(m) => m.def.pinning,
+            Self::StructOps(m) => m.def.pinning,
         }
     }
 
@@ -222,6 +460,7 @@ impl Map {
         match self {
             Self::Legacy(m) => &m.data,
             Self::Btf(m) => &m.data,
+            Self::StructOps(m) => &m.data,
         }
     }
 
@@ -230,6 +469,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.data.as_mut(),
             Self::Btf(m) => m.data.as_mut(),
+            Self::StructOps(m) => m.data.as_mut(),
         }
     }
 
@@ -238,6 +478,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.section_index,
             Self::Btf(m) => m.section_index,
+            Self::StructOps(m) => m.section_index,
         }
     }
 
@@ -246,6 +487,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.section_kind,
             Self::Btf(_) => EbpfSectionKind::BtfMaps,
+            Self::StructOps(_) => EbpfSectionKind::StructOps,
         }
     }
 
@@ -257,6 +499,7 @@ impl Map {
         match self {
             Self::Legacy(m) => m.symbol_index,
             Self::Btf(m) => Some(m.symbol_index),
+            Self::StructOps(m) => Some(m.symbol_index),
         }
     }
 
@@ -286,6 +529,9 @@ impl Map {
                     data: Vec::new(),
                 })
             }),
+            // BTF maps representing struct_ops instances
+            // have only 1 key whose value is not another BTF map.
+            Self::StructOps(_) => None,
         }
     }
 

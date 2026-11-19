@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use crate::{
     kernel_features::{FEATURES, Feature},
-    maps::{Map, MapData, MapError},
+    maps::{Map, MapData, MapError, StructOps, struct_ops::StructOpsInstance},
     programs::{
         BtfTracePoint, CgroupDevice, CgroupSkb, CgroupSock, CgroupSockAddr, CgroupSockopt,
         CgroupSysctl, Extension, FEntry, FExit, FlowDissector, Iter, KProbe, LircMode2, Lsm,
@@ -86,6 +86,8 @@ pub struct EbpfLoader<'a> {
     map_pin_path_by_name: HashMap<&'a str, Cow<'a, Path>>,
 
     extensions: HashSet<&'a str>,
+    // Optional struct_ops instances to create.
+    struct_ops: HashSet<&'a str>,
     verifier_log_level: VerifierLogLevel,
     allow_unsupported_maps: bool,
 }
@@ -153,6 +155,7 @@ impl<'a> EbpfLoader<'a> {
             max_entries: HashMap::new(),
             map_pin_path_by_name: HashMap::new(),
             extensions: HashSet::new(),
+            struct_ops: HashSet::new(),
             verifier_log_level: VerifierLogLevel::default(),
             allow_unsupported_maps: false,
         }
@@ -397,6 +400,29 @@ impl<'a> EbpfLoader<'a> {
         self
     }
 
+    /// Creates an optional `struct_ops` instance.
+    ///
+    /// A `struct_ops` instance declared in a section whose name starts with `?`,
+    /// such as `?.struct_ops.link`, is skipped by default, so that an object
+    /// can carry instances for struct types the running kernel may not have.
+    /// Use this method to create the instance named `name`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use aya::EbpfLoader;
+    ///
+    /// let bpf = EbpfLoader::new()
+    ///     .create_struct_ops("experimental")
+    ///     .load_file("file.o")?;
+    /// # Ok::<(), aya::EbpfError>(())
+    /// ```
+    ///
+    pub fn create_struct_ops(&mut self, name: &'a str) -> &mut Self {
+        self.struct_ops.insert(name);
+        self
+    }
+
     /// Sets BPF verifier log level.
     ///
     /// # Example
@@ -456,6 +482,7 @@ impl<'a> EbpfLoader<'a> {
             globals,
             max_entries,
             extensions,
+            struct_ops,
             verifier_log_level,
             allow_unsupported_maps,
             map_pin_path_by_name,
@@ -480,7 +507,8 @@ impl<'a> EbpfLoader<'a> {
                             | ProgramSection::Lsm { sleepable: _ }
                             | ProgramSection::LsmCgroup
                             | ProgramSection::BtfTracePoint
-                            | ProgramSection::Iter { sleepable: _ } => {
+                            | ProgramSection::Iter { sleepable: _ }
+                            | ProgramSection::StructOps { sleepable: _ } => {
                                 return Err(EbpfError::BtfError(err));
                             }
                             ProgramSection::KRetProbe
@@ -531,7 +559,7 @@ impl<'a> EbpfLoader<'a> {
             None
         };
 
-        if obj.has_btf_relocations() || obj.has_typed_ksyms() {
+        if obj.has_btf_relocations() || obj.has_typed_ksyms() || !obj.struct_ops.is_empty() {
             let endianness = obj.endianness;
             let target_btf: Result<Cow<'_, Btf>, EbpfError> = match btf {
                 TargetBtf::System => Btf::from_sys_fs().map(Cow::Owned).map_err(EbpfError::from),
@@ -549,6 +577,10 @@ impl<'a> EbpfLoader<'a> {
                         .and_then(|()| {
                             obj.resolve_externs(Some(&target_btf))
                                 .map_err(EbpfError::from)
+                        })
+                        .and_then(|()| {
+                            obj.resolve_struct_ops(&target_btf, struct_ops)
+                                .map_err(EbpfError::from)
                         });
 
                     if let Cow::Owned(target_btf) = target_btf {
@@ -558,9 +590,12 @@ impl<'a> EbpfLoader<'a> {
                     result?;
                 }
                 Err(err) => {
-                    // CO-RE relocations and strong typed ksyms cannot be resolved without target
-                    // BTF, so preserve the original loading error.
-                    if obj.has_btf_relocations() || obj.has_strong_typed_ksyms() {
+                    // CO-RE relocations, strong typed ksyms and struct_ops instances cannot be
+                    // resolved without target BTF, so preserve the original loading error.
+                    if obj.has_btf_relocations()
+                        || obj.has_strong_typed_ksyms()
+                        || !obj.struct_ops.is_empty()
+                    {
                         return Err(err);
                     }
 
@@ -691,6 +726,17 @@ impl<'a> EbpfLoader<'a> {
 
         obj.relocate_calls(&text_sections)?;
         obj.sanitize_functions(|| FEATURES.is_supported(Feature::BpfProbeReadKernel));
+
+        // Program name -> the kernel struct and member the program implements.
+        let struct_ops_targets: HashMap<&str, aya_obj::programs::StructOpsAttachTarget> = obj
+            .struct_ops_attachments
+            .iter()
+            .filter_map(|(name, attachment)| {
+                attachment
+                    .attach_target
+                    .map(|target| (name.as_str(), target))
+            })
+            .collect();
 
         let programs = obj
             .programs
@@ -877,17 +923,47 @@ impl<'a> EbpfLoader<'a> {
                             }
                             Program::Iter(Iter { data })
                         }
+                        ProgramSection::StructOps { sleepable } => {
+                            let mut data =
+                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            if *sleepable {
+                                data.flags = BPF_F_SLEEPABLE;
+                            }
+                            // A program no created instance refers to has no target,
+                            // and the kernel refuses to load it.
+                            if let Some(target) = struct_ops_targets.get(name.as_str()) {
+                                data.attach_btf_id = Some(target.kernel_type_id);
+                                data.expected_attach_type = Some(target.member_index);
+                            }
+                            Program::StructOps(crate::programs::StructOps { data })
+                        }
                     }
                 };
                 (name, program)
             })
             .collect();
-        let maps = maps
-            .drain()
-            .map(|data| parse_map(data, *allow_unsupported_maps))
-            .collect::<Result<HashMap<String, Map>, EbpfError>>()?;
+        // struct_ops maps are not for reading and writing: they are handed out
+        // as instances, together with their programs.
+        let mut struct_ops = HashMap::new();
+        let mut parsed_maps = HashMap::new();
+        for (name, data) in maps.drain() {
+            match StructOpsInstance::try_new(data) {
+                Ok(instance) => {
+                    struct_ops.insert(name, instance);
+                }
+                Err(data) => {
+                    let (name, map) = parse_map((name, data), *allow_unsupported_maps)?;
+                    parsed_maps.insert(name, map);
+                }
+            }
+        }
+        let maps = parsed_maps;
 
-        Ok(Ebpf { maps, programs })
+        Ok(Ebpf {
+            struct_ops,
+            maps,
+            programs,
+        })
     }
 }
 
@@ -1120,6 +1196,8 @@ impl Default for EbpfLoader<'_> {
 /// The main entry point into the library, used to work with eBPF programs and maps.
 #[derive(Debug)]
 pub struct Ebpf {
+    // Dropped first, so that instances are unregistered before their programs go.
+    struct_ops: HashMap<String, StructOpsInstance>,
     maps: HashMap<String, Map>,
     programs: HashMap<String, Program>,
 }
@@ -1185,6 +1263,38 @@ impl Ebpf {
     /// documentation][crate::maps].
     pub fn map(&self, name: &str) -> Option<&Map> {
         self.maps.get(name)
+    }
+
+    /// Returns the `struct_ops` instance with the given name.
+    ///
+    /// The returned handle loads the programs that implement the instance and
+    /// registers it with the kernel, see [`StructOps`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[derive(Debug, thiserror::Error)]
+    /// # enum Error {
+    /// #     #[error(transparent)]
+    /// #     StructOps(#[from] aya::maps::StructOpsError),
+    /// #     #[error(transparent)]
+    /// #     Ebpf(#[from] aya::EbpfError)
+    /// # }
+    /// # let mut bpf = aya::Ebpf::load(&[])?;
+    /// let mut cubic = bpf.struct_ops_mut("cubic").unwrap();
+    /// cubic.load()?;
+    /// cubic.attach()?;
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub fn struct_ops_mut(&mut self, name: &str) -> Option<StructOps<'_>> {
+        let Self {
+            struct_ops,
+            maps: _,
+            programs,
+        } = self;
+        struct_ops
+            .get_mut(name)
+            .map(|instance| StructOps::new(instance, programs))
     }
 
     /// Returns a mutable reference to the map with the given name.
@@ -1392,6 +1502,10 @@ pub enum EbpfError {
     /// Error parsing BPF object
     #[error("error parsing BPF object: {0}")]
     ParseError(#[from] ParseError),
+
+    /// Error resolving `struct_ops` instances against the kernel's BTF
+    #[error("struct_ops error: {0}")]
+    StructOpsError(#[from] aya_obj::maps::StructOpsError),
 
     /// Error parsing BTF object
     #[error("BTF error: {0}")]
