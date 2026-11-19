@@ -149,6 +149,10 @@ name = "strncmp"
 path = "src/strncmp.rs"
 
 [[bin]]
+name = "struct-ops-macro"
+path = "src/struct_ops_macro.rs"
+
+[[bin]]
 name = "tc-classid"
 path = "src/tc_classid.rs"
 

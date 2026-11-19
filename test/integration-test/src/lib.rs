@@ -91,6 +91,7 @@ bpf_file!(
     SOCK_HASH => "sock-hash",
     SOCK_MAP => "sock-map",
     STRNCMP => "strncmp",
+    STRUCT_OPS_MACRO => "struct-ops-macro",
     TC_CLASSID => "tc-classid",
     TCX => "tcx",
     TEST => "test",

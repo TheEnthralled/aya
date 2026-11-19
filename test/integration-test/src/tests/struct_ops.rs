@@ -211,3 +211,56 @@ fn struct_ops_link() {
     drop(bpf);
     assert!(!registered("aya_link"));
 }
+
+/// The algorithm of [`struct_ops`], written in Rust with the `struct_ops`
+/// macro.
+#[test]
+fn struct_ops_macro() {
+    if !struct_ops_supported(false) {
+        return;
+    }
+    let _netns = NetNsGuard::new().unwrap();
+
+    let mut bpf = Ebpf::load(crate::STRUCT_OPS_MACRO).unwrap();
+    // `optional` puts the instance in a `?` section.
+    assert!(bpf.struct_ops_mut("macro_link").is_none());
+
+    // The instance is named after its type.
+    let mut plain = bpf.struct_ops_mut("aya_macro_plain").unwrap();
+    assert_eq!(plain.struct_name(), "tcp_congestion_ops");
+    plain.load().unwrap();
+    plain.attach().unwrap();
+    assert!(registered("aya_macro_plain"));
+
+    use_congestion_control("aya_macro_plain").unwrap();
+    assert_eq!(init_calls(&bpf), 1);
+
+    bpf.struct_ops_mut("aya_macro_plain")
+        .unwrap()
+        .detach()
+        .unwrap();
+    assert!(!registered("aya_macro_plain"));
+}
+
+#[test]
+fn struct_ops_macro_link() {
+    if !struct_ops_supported(true) {
+        return;
+    }
+    let _netns = NetNsGuard::new().unwrap();
+
+    let mut bpf = EbpfLoader::new()
+        .create_struct_ops("macro_link")
+        .load(crate::STRUCT_OPS_MACRO)
+        .unwrap();
+    let mut link = bpf.struct_ops_mut("macro_link").unwrap();
+    link.load().unwrap();
+    link.attach().unwrap();
+    assert!(registered("aya_macro_link"));
+
+    use_congestion_control("aya_macro_link").unwrap();
+    assert_eq!(init_calls(&bpf), 1);
+
+    bpf.struct_ops_mut("macro_link").unwrap().detach().unwrap();
+    assert!(!registered("aya_macro_link"));
+}
